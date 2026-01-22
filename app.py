@@ -117,18 +117,38 @@ col1, col2 = st.columns([1, 2], gap="large")
 with col1:
     st.markdown("### 🚢 Shipment Configuration")
     
-    # Route selection
-    routes = [
-        ("Shanghai", "Rotterdam"),
-        ("Singapore", "London"),
-        ("Mumbai", "Hamburg"),
-        ("Dubai", "Amsterdam")
-    ]
-    route_names = [f"{o} → {d}" for o, d in routes]
+    # Route input mode
+    input_mode = st.radio(
+        "Route Selection Mode",
+        ["📋 Quick Select (Demo Routes)", "✏️ Custom Input"],
+        label_visibility="collapsed"
+    )
     
-    selected_route = st.selectbox("Select Route", route_names)
-    route_idx = route_names.index(selected_route)
-    origin, dest = routes[route_idx]
+    if input_mode == "📋 Quick Select (Demo Routes)":
+        # Predefined routes for quick demo
+        routes = [
+            ("Shanghai", "Rotterdam"),
+            ("Singapore", "London"),
+            ("Mumbai", "Hamburg"),
+            ("Dubai", "Amsterdam")
+        ]
+        route_names = [f"{o} → {d}" for o, d in routes]
+        
+        selected_route = st.selectbox("Select Route", route_names)
+        route_idx = route_names.index(selected_route)
+        origin, dest = routes[route_idx]
+        
+        st.caption("💡 Switch to Custom Input to enter your own routes")
+    
+    else:
+        # Custom input mode
+        col_a, col_b = st.columns(2)
+        with col_a:
+            origin = st.text_input("Origin Port/City", value="Shanghai", placeholder="e.g., Tokyo")
+        with col_b:
+            dest = st.text_input("Destination Port/City", value="Rotterdam", placeholder="e.g., New York")
+        
+        st.caption("💡 Custom routes use default distance calculations")
     
     # Cargo details
     weight = st.number_input("Cargo Weight (Metric Tonnes)", value=100, min_value=1, step=10)

@@ -1,5 +1,10 @@
 from crewai import Agent, Task, Crew, Process
-from tools import LogisticsTools
+from tools import CarbonCalculatorTool, PortCongestionTool, RouteCompareTool, LogisticsTools
+
+# Initialize tool instances
+carbon_calc = CarbonCalculatorTool()
+port_check = PortCongestionTool()
+route_compare = RouteCompareTool()
 
 # Agent 1: The Green Auditor
 carbon_agent = Agent(
@@ -8,11 +13,7 @@ carbon_agent = Agent(
     backstory="""You are a radical environmental scientist who prioritizes planetary health. 
     You analyze emissions data, advocate for slow-steaming and rail transport, and calculate 
     the true environmental cost of every logistics decision. Carbon tax is your weapon.""",
-    tools=[
-        LogisticsTools.calculate_carbon,
-        LogisticsTools.compare_routes,
-        LogisticsTools.get_port_congestion
-    ],
+    tools=[carbon_calc, route_compare, port_check],
     verbose=True,
     allow_delegation=False
 )
@@ -24,11 +25,7 @@ cost_agent = Agent(
     backstory="""You are a cutthroat logistics veteran who has orchestrated thousands of shipments. 
     Time is money. Delays cost millions. You optimize for fastest routes, lowest base costs, 
     and hate carbon taxes eating into margins. Speed and efficiency are your religion.""",
-    tools=[
-        LogisticsTools.calculate_carbon,
-        LogisticsTools.compare_routes,
-        LogisticsTools.get_port_congestion
-    ],
+    tools=[carbon_calc, route_compare, port_check],
     verbose=True,
     allow_delegation=False
 )
@@ -40,10 +37,7 @@ risk_agent = Agent(
     backstory="""You are a paranoid but brilliant risk analyst. You've seen supply chains 
     collapse from port strikes, congestion, and weather. You assess every variable that could 
     derail a shipment and provide contingency recommendations.""",
-    tools=[
-        LogisticsTools.get_port_congestion,
-        LogisticsTools.compare_routes
-    ],
+    tools=[port_check, route_compare],
     verbose=True,
     allow_delegation=False
 )
@@ -60,7 +54,7 @@ def initiate_swarm(origin, dest, weight):
     carbon_task = Task(
         description=f"""Analyze carbon emissions for shipping {weight} tonnes from {origin} to {dest}.
         
-        Compare these modes: standard sea freight, slow-steaming sea freight, and rail.
+        Use the Route Comparer tool to compare these modes: standard sea freight, slow-steaming sea freight, and rail.
         Calculate total emissions and carbon tax impact ($100/tonne CO2).
         
         Recommend the GREENEST option and explain the environmental benefits.""",
@@ -72,7 +66,7 @@ def initiate_swarm(origin, dest, weight):
     cost_task = Task(
         description=f"""Analyze cost and delivery time for shipping {weight} tonnes from {origin} to {dest}.
         
-        Compare total costs (base + carbon tax) and transit times across all modes.
+        Use the Route Comparer tool to compare total costs (base + carbon tax) and transit times across all modes.
         Factor in that faster delivery = better cash flow and customer satisfaction.
         
         Recommend the MOST COST-EFFECTIVE option balancing speed and total cost.""",
@@ -84,7 +78,7 @@ def initiate_swarm(origin, dest, weight):
     risk_task = Task(
         description=f"""Assess risks for shipping from {origin} to {dest}.
         
-        Check port congestion levels at both locations.
+        Use the Port Congestion Checker to check congestion levels at {origin} and {dest}.
         Identify potential delays, reliability issues, and alternative routing needs.
         
         Provide a RISK RATING and mitigation strategy.""",
