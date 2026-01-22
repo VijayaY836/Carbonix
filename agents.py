@@ -42,7 +42,89 @@ risk_agent = Agent(
     allow_delegation=False
 )
 
-def initiate_swarm(origin, dest, weight):
+def calculate_trilemma_score(route, weights={'cost': 0.33, 'carbon': 0.33, 'time': 0.34}):
+    """
+    Calculate trilemma optimization score for a route.
+    Lower is better (normalized penalty score).
+    """
+    # Normalize each factor (simple linear scaling for demo)
+    cost_penalty = route['total_cost_usd'] / 100000  # Normalize to 0-1 range
+    carbon_penalty = route['emissions_tonnes'] / 100  # Normalize to 0-1 range
+    time_penalty = route['transit_days'] / 100  # Normalize to 0-1 range
+    
+    # Weighted trilemma score
+    score = (
+        weights['cost'] * cost_penalty +
+        weights['carbon'] * carbon_penalty +
+        weights['time'] * time_penalty
+    )
+    
+    return round(score, 4)
+
+def select_optimal_route(route_data, origin_congestion, dest_congestion, weights=None):
+    """
+    AI-driven route selection based on trilemma optimization.
+    Returns the selected route with reasoning.
+    """
+    if weights is None:
+        weights = {'cost': 0.33, 'carbon': 0.33, 'time': 0.34}
+    
+    # Calculate trilemma scores
+    for route in route_data:
+        route['trilemma_score'] = calculate_trilemma_score(route, weights)
+    
+    # Select optimal (lowest score)
+    optimal = min(route_data, key=lambda x: x['trilemma_score'])
+    
+    # Generate reasoning bullets
+    reasons = []
+    
+    # Carbon tax analysis
+    carbon_tax_pct = (optimal['carbon_tax_usd'] / optimal['total_cost_usd']) * 100
+    if carbon_tax_pct > 15:
+        reasons.append(f"⚠️ Carbon tax represents {carbon_tax_pct:.1f}% of total cost - green routing critical")
+    
+    # Congestion risk
+    avg_congestion = (origin_congestion['congestion_level'] + dest_congestion['congestion_level']) / 2
+    if avg_congestion > 6:
+        reasons.append(f"🚨 High port congestion ({avg_congestion:.1f}/10) - reliability prioritized")
+    elif avg_congestion < 4:
+        reasons.append(f"✅ Low congestion risk ({avg_congestion:.1f}/10) - stable route conditions")
+    
+    # Emission efficiency
+    emissions_sorted = sorted(route_data, key=lambda x: x['emissions_tonnes'])
+    if optimal == emissions_sorted[0]:
+        emission_reduction = ((route_data[0]['emissions_tonnes'] - optimal['emissions_tonnes']) / route_data[0]['emissions_tonnes']) * 100
+        if emission_reduction > 5:
+            reasons.append(f"🌱 Achieves {emission_reduction:.1f}% emission reduction vs baseline")
+    
+    # Cost efficiency
+    if optimal['total_cost_usd'] == min(r['total_cost_usd'] for r in route_data):
+        reasons.append(f"💰 Most cost-effective option at ${optimal['total_cost_usd']:,.0f}")
+    
+    # Time factor
+    if optimal['transit_days'] < 50:
+        reasons.append(f"⚡ Fast delivery ({optimal['transit_days']:.1f} days) maintains supply chain velocity")
+    
+    # Trilemma improvement
+    baseline_score = route_data[0]['trilemma_score']
+    if optimal['trilemma_score'] < baseline_score:
+        improvement_pct = ((baseline_score - optimal['trilemma_score']) / baseline_score) * 100
+        reasons.append(f"📊 Net trilemma score improved by {improvement_pct:.1f}%")
+    
+    # Ensure we have at least 2-3 bullets
+    if len(reasons) < 2:
+        reasons.append(f"🎯 Balanced optimization across cost, carbon, and time constraints")
+    
+    return {
+        'selected_mode': optimal['mode'],
+        'selected_route': optimal,
+        'trilemma_score': optimal['trilemma_score'],
+        'reasoning': reasons[:3],  # Top 3 reasons
+        'all_scores': {r['mode']: r['trilemma_score'] for r in route_data}
+    }
+
+def initiate_swarm(origin, dest, weight, trilemma_weights=None):
     """
     Orchestrate multi-agent deliberation for optimal routing.
     
@@ -102,9 +184,13 @@ def initiate_swarm(origin, dest, weight):
     origin_congestion = LogisticsTools.get_port_congestion(origin)
     dest_congestion = LogisticsTools.get_port_congestion(dest)
     
+    # AI-driven route selection
+    optimal_decision = select_optimal_route(route_data, origin_congestion, dest_congestion, trilemma_weights)
+    
     return {
         'agent_output': str(result),
         'route_comparison': route_data,
         'origin_port_status': origin_congestion,
-        'dest_port_status': dest_congestion
+        'dest_port_status': dest_congestion,
+        'optimal_decision': optimal_decision
     }

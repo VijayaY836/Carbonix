@@ -17,7 +17,7 @@ def get_base64_of_bin_file(bin_file):
     except FileNotFoundError:
         return None
 
-img_base64 = get_base64_of_bin_file('bg.png')
+img_base64 = get_base64_of_bin_file('bg1.png')
 
 # --- SIDEBAR CONTROLS ---
 with st.sidebar:
@@ -27,7 +27,107 @@ with st.sidebar:
     
     st.divider()
     st.header("⚙️ Simulation Parameters")
-    carbon_tax_rate = st.number_input("Carbon Tax ($/tonne CO2)", value=100, step=10)
+    
+    col_tax1, col_tax2 = st.columns([2, 1])
+    with col_tax1:
+        carbon_tax_rate = st.number_input("Carbon Tax ($/tonne CO2)", value=100, step=10, key="carbon_tax_input")
+    with col_tax2:
+        st.markdown("<br>", unsafe_allow_html=True)  # Spacing
+        if st.button("⚠️ Regulatory Shock", use_container_width=True, help="Simulate sudden carbon tax increase (+40%)"):
+            # Trigger shock scenario
+            new_tax = int(carbon_tax_rate * 1.4)  # 40% increase
+            st.session_state['shock_triggered'] = True
+            st.session_state['original_tax'] = carbon_tax_rate
+            st.session_state['new_tax'] = new_tax
+            st.rerun()
+    
+    # Show shock alert if triggered
+    if st.session_state.get('shock_triggered', False):
+        original = st.session_state.get('original_tax', 100)
+        new = st.session_state.get('new_tax', 140)
+        increase_pct = ((new - original) / original) * 100
+        
+        st.error(f"""
+        🚨 **REGULATORY SHOCK DETECTED**
+        
+        Carbon tax increased from ${original}/tonne → ${new}/tonne (+{increase_pct:.0f}%)
+        
+        System re-optimizing routes...
+        """)
+        
+        # Auto-update the tax input
+        st.session_state['carbon_tax_input'] = new
+        
+        # Clear shock flag after display
+        if st.button("✓ Acknowledge & Continue", use_container_width=True):
+            st.session_state['shock_triggered'] = False
+            st.rerun()
+    
+    st.divider()
+    
+    # Trilemma Optimization Weights
+    with st.expander("🎯 Trilemma Optimization Weights", expanded=False):
+        st.markdown("""
+        **Configure policy priorities** - adjust how the AI weighs competing objectives:
+        """)
+        
+        st.markdown("##### Decision Framework")
+        cost_weight = st.slider(
+            "💰 Cost Priority",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.33,
+            step=0.05,
+            help="Higher = prioritize minimizing total logistics cost"
+        )
+        
+        carbon_weight = st.slider(
+            "🌱 Carbon Priority",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.33,
+            step=0.05,
+            help="Higher = prioritize minimizing CO₂ emissions"
+        )
+        
+        time_weight = st.slider(
+            "⚡ Time Priority",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.34,
+            step=0.05,
+            help="Higher = prioritize faster delivery"
+        )
+        
+        # Show normalized weights
+        total_weight = cost_weight + carbon_weight + time_weight
+        if total_weight > 0:
+            norm_cost = cost_weight / total_weight
+            norm_carbon = carbon_weight / total_weight
+            norm_time = time_weight / total_weight
+            
+            st.markdown(f"""
+            **Normalized Weights:**
+            - Cost: `{norm_cost:.2f}` ({norm_cost*100:.0f}%)
+            - Carbon: `{norm_carbon:.2f}` ({norm_carbon*100:.0f}%)
+            - Time: `{norm_time:.2f}` ({norm_time*100:.0f}%)
+            """)
+            
+            # Store in session state
+            st.session_state['trilemma_weights'] = {
+                'cost': norm_cost,
+                'carbon': norm_carbon,
+                'time': norm_time
+            }
+        else:
+            st.warning("⚠️ At least one weight must be > 0")
+            st.session_state['trilemma_weights'] = {
+                'cost': 0.33,
+                'carbon': 0.33,
+                'time': 0.34
+            }
+        
+        st.info("💡 **Enterprise Use Case**: Different stakeholders (CFO, CSO, COO) can adjust priorities based on quarterly objectives or regulatory changes.")
     
     st.divider()
     st.info("**Thiran 2026**\nAgentic Carbon Optimization")
@@ -157,8 +257,15 @@ with col1:
     
     # Deploy button
     if st.button("🚀 DEPLOY AGENT SWARM", use_container_width=True):
+        # Get trilemma weights from session state
+        weights = st.session_state.get('trilemma_weights', {
+            'cost': 0.33,
+            'carbon': 0.33,
+            'time': 0.34
+        })
+        
         with st.spinner("🤖 Agents analyzing routes..."):
-            result = initiate_swarm(origin, dest, weight)
+            result = initiate_swarm(origin, dest, weight, trilemma_weights=weights)
             st.session_state['agent_result'] = result
             st.session_state['origin'] = origin
             st.session_state['dest'] = dest
@@ -170,6 +277,41 @@ with col2:
     if 'agent_result' in st.session_state:
         result = st.session_state['agent_result']
         route_data = result['route_comparison']
+        optimal = result['optimal_decision']
+        
+        # 🔥 AGENT DECISION CARD - THE MONEY SHOT
+        st.markdown("### 🤖 AGENT-SELECTED OPTIMAL STRATEGY")
+        
+        decision_card = f"""
+        <div style="
+            background: linear-gradient(135deg, rgba(0, 255, 204, 0.15) 0%, rgba(0, 200, 255, 0.15) 100%);
+            border: 2px solid #00ffcc;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 30px rgba(0, 255, 204, 0.3);
+        ">
+            <h2 style="color: #00ffcc; margin-top: 0; font-size: 24px; text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);">
+                ✓ {optimal['selected_mode'].replace('_', ' ').upper()}
+            </h2>
+            <p style="font-size: 18px; color: #ffffff; margin: 10px 0;">
+                <strong>Trilemma Score:</strong> <span style="color: #00ffcc;">{optimal['trilemma_score']}</span>
+                <span style="color: #888; font-size: 14px; margin-left: 10px;">(lower is better)</span>
+            </p>
+            <hr style="border-color: rgba(0, 255, 204, 0.3); margin: 15px 0;">
+            <div style="color: #ffffff; font-size: 16px; line-height: 1.8;">
+                {'<br>'.join(f'• {reason}' for reason in optimal['reasoning'])}
+            </div>
+        </div>
+        """
+        st.markdown(decision_card, unsafe_allow_html=True)
+        
+        # Show current trilemma weights if customized
+        current_weights = st.session_state.get('trilemma_weights', {})
+        if current_weights and current_weights != {'cost': 0.33, 'carbon': 0.33, 'time': 0.34}:
+            st.caption(f"🎯 Decision optimized with weights: Cost {current_weights['cost']:.0%} | Carbon {current_weights['carbon']:.0%} | Time {current_weights['time']:.0%}")
+        
+        st.divider()
         
         # Create tabs for different views
         tab1, tab2, tab3, tab4 = st.tabs(["📊 Route Comparison", "🌱 Emissions Analysis", "🏭 Port Status", "🤖 Agent Insights"])
@@ -177,28 +319,40 @@ with col2:
         with tab1:
             st.markdown("#### Route Options Comparison")
             
-            # Convert to DataFrame
+            # Convert to DataFrame and add trilemma scores
             df = pd.DataFrame(route_data)
             
-            # Display metrics
+            # Highlight the selected mode
+            selected_mode = optimal['selected_mode']
+            
+            # Display metrics with winner highlight
             cols = st.columns(len(route_data))
             for idx, route in enumerate(route_data):
                 with cols[idx]:
                     mode_label = route['mode'].replace('_', ' ').title()
+                    is_selected = route['mode'] == selected_mode
+                    
+                    if is_selected:
+                        st.markdown(f"**🏆 {mode_label}**")
+                    else:
+                        st.markdown(f"**{mode_label}**")
+                    
                     st.metric(
-                        label=f"{mode_label}",
+                        label="Total Cost",
                         value=f"${route['total_cost_usd']:,.0f}",
                         delta=f"{route['emissions_tonnes']} t CO₂"
                     )
+                    st.caption(f"Trilemma: {route.get('trilemma_score', 'N/A')}")
             
             # Comparison table
             st.dataframe(
-                df[['mode', 'distance_km', 'emissions_tonnes', 'total_cost_usd', 'transit_days']].style.format({
+                df[['mode', 'distance_km', 'emissions_tonnes', 'total_cost_usd', 'transit_days', 'trilemma_score']].style.format({
                     'distance_km': '{:,.0f}',
                     'emissions_tonnes': '{:.2f}',
                     'total_cost_usd': '${:,.2f}',
-                    'transit_days': '{:.1f}'
-                }),
+                    'transit_days': '{:.1f}',
+                    'trilemma_score': '{:.4f}'
+                }).highlight_min(subset=['trilemma_score'], color='lightgreen'),
                 use_container_width=True
             )
             
