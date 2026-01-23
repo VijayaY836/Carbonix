@@ -28,9 +28,18 @@ with st.sidebar:
     st.divider()
     st.header("⚙️ Simulation Parameters")
     
+    # Initialize shock tax if not set
+    if 'shock_tax_value' not in st.session_state:
+        st.session_state['shock_tax_value'] = 100
+    
     col_tax1, col_tax2 = st.columns([2, 1])
     with col_tax1:
-        carbon_tax_rate = st.number_input("Carbon Tax ($/tonne CO2)", value=100, step=10, key="carbon_tax_input")
+        carbon_tax_rate = st.number_input(
+            "Carbon Tax ($/tonne CO2)", 
+            value=st.session_state['shock_tax_value'], 
+            step=10, 
+            key="carbon_tax_input"
+        )
     with col_tax2:
         st.markdown("<br>", unsafe_allow_html=True)  # Spacing
         if st.button("⚠️ Regulatory Shock", use_container_width=True, help="Simulate sudden carbon tax increase (+40%)"):
@@ -38,13 +47,13 @@ with st.sidebar:
             new_tax = int(carbon_tax_rate * 1.4)  # 40% increase
             st.session_state['shock_triggered'] = True
             st.session_state['original_tax'] = carbon_tax_rate
-            st.session_state['new_tax'] = new_tax
+            st.session_state['shock_tax_value'] = new_tax
             st.rerun()
     
     # Show shock alert if triggered
     if st.session_state.get('shock_triggered', False):
         original = st.session_state.get('original_tax', 100)
-        new = st.session_state.get('new_tax', 140)
+        new = st.session_state.get('shock_tax_value', 140)
         increase_pct = ((new - original) / original) * 100
         
         st.error(f"""
@@ -54,9 +63,6 @@ with st.sidebar:
         
         System re-optimizing routes...
         """)
-        
-        # Auto-update the tax input
-        st.session_state['carbon_tax_input'] = new
         
         # Clear shock flag after display
         if st.button("✓ Acknowledge & Continue", use_container_width=True):
@@ -264,8 +270,11 @@ with col1:
             'time': 0.34
         })
         
+        # Get current carbon tax rate
+        current_tax = st.session_state.get('carbon_tax_input', 100)
+        
         with st.spinner("🤖 Agents analyzing routes..."):
-            result = initiate_swarm(origin, dest, weight, trilemma_weights=weights)
+            result = initiate_swarm(origin, dest, weight, trilemma_weights=weights, carbon_tax_rate=current_tax)
             st.session_state['agent_result'] = result
             st.session_state['origin'] = origin
             st.session_state['dest'] = dest
@@ -308,8 +317,13 @@ with col2:
         
         # Show current trilemma weights if customized
         current_weights = st.session_state.get('trilemma_weights', {})
+        current_tax = result.get('carbon_tax_rate', 100)
+        
+        weight_text = ""
         if current_weights and current_weights != {'cost': 0.33, 'carbon': 0.33, 'time': 0.34}:
-            st.caption(f"🎯 Decision optimized with weights: Cost {current_weights['cost']:.0%} | Carbon {current_weights['carbon']:.0%} | Time {current_weights['time']:.0%}")
+            weight_text = f"🎯 Weights: Cost {current_weights['cost']:.0%} | Carbon {current_weights['carbon']:.0%} | Time {current_weights['time']:.0%} • "
+        
+        st.caption(f"{weight_text}💰 Carbon Tax: ${current_tax}/tonne CO₂")
         
         st.divider()
         
@@ -375,6 +389,10 @@ with col2:
         with tab2:
             st.markdown("#### Carbon Emissions Deep Dive")
             
+            # Show carbon tax impact
+            current_tax = result.get('carbon_tax_rate', 100)
+            st.info(f"💰 **Current Carbon Tax Rate:** ${current_tax}/tonne CO₂")
+            
             # Emissions comparison
             fig_emissions = px.bar(
                 df,
@@ -392,6 +410,24 @@ with col2:
                 yaxis_title='Emissions (Tonnes CO₂)'
             )
             st.plotly_chart(fig_emissions, use_container_width=True)
+            
+            # Carbon tax impact comparison
+            fig_tax = px.bar(
+                df,
+                x='mode',
+                y='carbon_tax_usd',
+                title=f'Carbon Tax Impact (${current_tax}/tonne)',
+                color='carbon_tax_usd',
+                color_continuous_scale='Oranges'
+            )
+            fig_tax.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white'),
+                xaxis_title='Mode',
+                yaxis_title='Carbon Tax (USD)'
+            )
+            st.plotly_chart(fig_tax, use_container_width=True)
             
             # Savings potential
             baseline = df[df['mode'] == 'sea']['emissions_tonnes'].values[0]
